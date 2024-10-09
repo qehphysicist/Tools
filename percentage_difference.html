@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>% Difference Calculator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 300px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        label {
+            display: inline-block;
+            width: 100px;
+            margin-bottom: 10px;
+        }
+        input {
+            width: 150px;
+            padding: 5px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h2>% Difference Calculator</h2>
+    <div>
+        <label for="benchmark">Benchmark:</label>
+        <input type="number" id="benchmark" step="any">
+    </div>
+    <div>
+        <label for="actual">Actual:</label>
+        <input type="number" id="actual" step="any">
+    </div>
+    <div>
+        <label for="difference">% Difference:</label>
+        <input type="text" id="difference" readonly>
+    </div>
+
+    <script>
+        function calculateDifference() {
+            const benchmark = parseFloat(document.getElementById('benchmark').value);
+            const actual = parseFloat(document.getElementById('actual').value);
+            const differenceElement = document.getElementById('difference');
+
+            if (!isNaN(benchmark) && !isNaN(actual) && benchmark !== 0) {
+                const diff = ((actual - benchmark) / Math.abs(benchmark)) * 100;
+                differenceElement.value = diff.toFixed(2) + '%';
+            } else {
+                differenceElement.value = '';
+            }
+        }
+
+        document.getElementById('benchmark').addEventListener('input', calculateDifference);
+        document.getElementById('actual').addEventListener('input', calculateDifference);
+    </script>
+</body>
+</html>
