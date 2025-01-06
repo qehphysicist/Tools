@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recombination Factor Calculator (TRS-398)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .calculator {
+            background-color: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: inline-block;
+            width: 200px;
+            margin-right: 10px;
+        }
+        input[type="number"] {
+            width: 150px;
+            padding: 5px;
+        }
+        .results {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Recombination Factor Calculator (TRS-398)</h1>
+    
+    <div class="calculator">
+        <div class="input-group">
+            <label for="v1">Normal Voltage V1 (V):</label>
+            <input type="number" id="v1" step="any" oninput="calculateKs()">
+        </div>
+        <div class="input-group">
+            <label for="m1">Reading at V1 (M1):</label>
+            <input type="number" id="m1" step="any" oninput="calculateKs()">
+        </div>
+        <div class="input-group">
+            <label for="v2">Reduced Voltage V2 (V):</label>
+            <input type="number" id="v2" step="any" oninput="calculateKs()">
+        </div>
+        <div class="input-group">
+            <label for="m2">Reading at V2 (M2):</label>
+            <input type="number" id="m2" step="any" oninput="calculateKs()">
+        </div>
+        
+        <div class="results" id="results">
+            <h3>Results:</h3>
+            <p>Voltage ratio (V1/V2): <span id="vratio">-</span></p>
+            <p>Two-voltage method ks: <span id="ks1">-</span></p>
+            <p>Fitted curve method ks: <span id="ks2">-</span></p>
+            <p>Difference between methods: <span id="diff">-</span></p>
+        </div>
+    </div>
+
+    <script>
+        // Pulsed beam coefficients from TRS-398
+        const coefficients = {
+            2.0: {a0: 2.337, a1: -3.636, a2: 2.299},
+            2.5: {a0: 1.474, a1: -1.587, a2: 1.114},
+            3.0: {a0: 1.198, a1: -0.875, a2: 0.677},
+            3.5: {a0: 1.080, a1: -0.542, a2: 0.463},
+            4.0: {a0: 1.022, a1: -0.363, a2: 0.341},
+            5.0: {a0: 0.975, a1: -0.188, a2: 0.214}
+        };
+
+        function interpolateCoefficients(voltageRatio) {
+            const ratios = Object.keys(coefficients).map(Number);
+            
+            // Find the two nearest voltage ratios
+            let lower = ratios[0];
+            let upper = ratios[ratios.length - 1];
+            
+            for (let i = 0; i < ratios.length - 1; i++) {
+                if (voltageRatio >= ratios[i] && voltageRatio <= ratios[i + 1]) {
+                    lower = ratios[i];
+                    upper = ratios[i + 1];
+                    break;
+                }
+            }
+
+            // Linear interpolation
+            const fraction = (voltageRatio - lower) / (upper - lower);
+            return {
+                a0: coefficients[lower].a0 + fraction * (coefficients[upper].a0 - coefficients[lower].a0),
+                a1: coefficients[lower].a1 + fraction * (coefficients[upper].a1 - coefficients[lower].a1),
+                a2: coefficients[lower].a2 + fraction * (coefficients[upper].a2 - coefficients[lower].a2)
+            };
+        }
+
+        function calculateKs() {
+            // Get input values
+            const V1 = parseFloat(document.getElementById('v1').value);
+            const V2 = parseFloat(document.getElementById('v2').value);
+            const M1 = parseFloat(document.getElementById('m1').value);
+            const M2 = parseFloat(document.getElementById('m2').value);
+
+            // Clear previous warnings
+            document.getElementById('results').querySelectorAll('p[style*="color: red"]').forEach(el => el.remove());
+
+            // Check if all inputs are valid
+            if (!V1 || !V2 || !M1 || !M2 || isNaN(V1) || isNaN(V2) || isNaN(M1) || isNaN(M2)) {
+                document.getElementById('vratio').textContent = '-';
+                document.getElementById('ks1').textContent = '-';
+                document.getElementById('ks2').textContent = '-';
+                document.getElementById('diff').textContent = '-';
+                return;
+            }
+
+            const voltageRatio = V1/V2;
+            const readingRatio = M1/M2;
+
+            // Two-voltage method
+            const ks1 = (voltageRatio - 1)/(voltageRatio - readingRatio);
+
+            // Fitted curve method using quadratic formula
+            const coef = interpolateCoefficients(voltageRatio);
+            const ks2 = coef.a0 + coef.a1 * (M1/M2) + coef.a2 * Math.pow(M1/M2, 2);
+
+            // Calculate difference
+            const diffPercent = Math.abs((ks1 - ks2)/ks1 * 100);
+
+            // Display results
+            document.getElementById('vratio').textContent = voltageRatio.toFixed(3);
+            document.getElementById('ks1').textContent = ks1.toFixed(4);
+            document.getElementById('ks2').textContent = ks2.toFixed(4);
+            document.getElementById('diff').textContent = diffPercent.toFixed(3) + '%';
+
+            // Add warnings
+            let warnings = [];
+            if (diffPercent > 0.1) {
+                warnings.push('Difference between methods exceeds 0.1%. Verify measurements.');
+            }
+            if (voltageRatio < 2.0 || voltageRatio > 5.0) {
+                warnings.push('Voltage ratio outside recommended range (2.0 - 5.0). Results may be unreliable.');
+            }
+            if (warnings.length > 0) {
+                document.getElementById('results').innerHTML += 
+                    warnings.map(w => `<p style="color: red;">Warning: ${w}</p>`).join('');
+            }
+        }
+
+        // Initial calculation
+        calculateKs();
+    </script>
+</body>
+</html>
