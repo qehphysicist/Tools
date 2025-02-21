@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Radioisotope Decay Calculator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        .time-group {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1rem;
+            align-items: end;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+        }
+        select, input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .timezone-select {
+            font-family: monospace;
+        }
+        .result {
+            margin-top: 2rem;
+            padding: 1rem;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+        }
+        .result p {
+            margin: 0;
+            font-size: 1.1rem;
+        }
+        .date-display {
+            font-family: monospace;
+            font-size: 1.1rem;
+            color: #444;
+            margin-top: 0.25rem;
+        }
+    </style>
+</head>
+<body>
+    <h1>Radioisotope Decay Calculator</h1>
+    
+    <div class="form-group">
+        <label for="isotope">Select Isotope:</label>
+        <select id="isotope">
+            <option value="Y-90">Y-90 (Half-life: 64.6 hours)</option>
+            <option value="I-131">I-131 (Half-life: 8.0249 days)</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="initial-activity">Initial Activity (MBq):</label>
+        <input type="number" id="initial-activity" min="0" step="0.01" value="100">
+    </div>
+
+    <div class="form-group">
+        <label>Initial Time:</label>
+        <div class="time-group">
+            <div>
+                <input type="datetime-local" id="initial-time">
+                <div id="initial-time-display" class="date-display"></div>
+            </div>
+            <div>
+                <select id="initial-timezone" class="timezone-select"></select>
+            </div>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label>Future Time:</label>
+        <div class="time-group">
+            <div>
+                <input type="datetime-local" id="future-time">
+                <div id="future-time-display" class="date-display"></div>
+            </div>
+            <div>
+                <select id="future-timezone" class="timezone-select"></select>
+            </div>
+        </div>
+    </div>
+
+    <div class="result">
+        <p>Future Activity: <span id="future-activity">--</span> MBq</p>
+        <p style="margin-top: 0.5rem; font-size: 0.9rem; color: #666;">
+            Time difference: <span id="time-difference">--</span>
+        </p>
+    </div>
+
+    <script>
+        function formatDate(date) {
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const day = date.getDate().toString().padStart(2, '0');
+            const month = months[date.getMonth()];
+            const year = date.getFullYear();
+            const hours = date.getHours().toString().padStart(2, '0');
+            const minutes = date.getMinutes().toString().padStart(2, '0');
+            return `${day}-${month}-${year} ${hours}:${minutes}`;
+        }
+
+        function generateTimezoneList() {
+            const timezones = [];
+            for (let offset = -12; offset <= 14; offset++) {
+                const sign = offset >= 0 ? '+' : '';
+                const label = `UTC${sign}${offset}:00`;
+                timezones.push({
+                    label,
+                    offset: offset * 60
+                });
+
+                if ([-9.5, -3.5, 3.5, 4.5, 5.5, 6.5, 8.5, 9.5, 10.5].includes(offset + 0.5)) {
+                    const halfLabel = `UTC${sign}${offset}:30`;
+                    timezones.push({
+                        label: halfLabel,
+                        offset: offset * 60 + 30
+                    });
+                }
+
+                if ([5.75, 8.75].includes(offset + 0.75)) {
+                    const quarterLabel = `UTC${sign}${offset}:45`;
+                    timezones.push({
+                        label: quarterLabel,
+                        offset: offset * 60 + 45
+                    });
+                }
+            }
+            return timezones;
+        }
+
+        function populateTimezones() {
+            const timezones = generateTimezoneList();
+            const initialSelect = document.getElementById('initial-timezone');
+            const futureSelect = document.getElementById('future-timezone');
+
+            initialSelect.innerHTML = '';
+            futureSelect.innerHTML = '';
+
+            timezones.forEach(tz => {
+                const option1 = new Option(tz.label, tz.offset);
+                const option2 = new Option(tz.label, tz.offset);
+                initialSelect.add(option1);
+                futureSelect.add(option2);
+            });
+
+            const userOffset = -new Date().getTimezoneOffset();
+            const closestOffset = userOffset - (userOffset % 15);
+
+            initialSelect.value = closestOffset;
+            futureSelect.value = closestOffset;
+        }
+
+        populateTimezones();
+
+        const now = new Date();
+        const future = new Date();
+        future.setHours(future.getHours() + 24);
+        
+        document.getElementById('initial-time').value = now.toISOString().slice(0, 16);
+        document.getElementById('future-time').value = future.toISOString().slice(0, 16);
+
+        const halfLives = {
+            'Y-90': 64.6,
+            'I-131': 8.0249 * 24 // converting days to hours
+        };
+
+        function formatTimeDifference(hours) {
+            const days = Math.floor(hours / 24);
+            const remainingHours = Math.floor(hours % 24);
+            const minutes = Math.floor((hours * 60) % 60);
+
+            let result = '';
+            if (days > 0) result += `${days} days `;
+            if (remainingHours > 0) result += `${remainingHours} hours `;
+            if (minutes > 0) result += `${minutes} minutes`;
+            return result.trim() || '0 minutes';
+        }
+
+        function updateTimeDisplays() {
+            const initialTimeInput = document.getElementById('initial-time');
+            const futureTimeInput = document.getElementById('future-time');
+            const initialTzOffset = parseInt(document.getElementById('initial-timezone').value);
+            const futureTzOffset = parseInt(document.getElementById('future-timezone').value);
+
+            if (initialTimeInput.value) {
+                const initialLocal = new Date(initialTimeInput.value);
+                const localOffset = initialLocal.getTimezoneOffset();
+                const initialAdjusted = new Date(initialLocal.getTime() - (initialTzOffset + localOffset) * 60000);
+                document.getElementById('initial-time-display').textContent = formatDate(initialAdjusted);
+            }
+
+            if (futureTimeInput.value) {
+                const futureLocal = new Date(futureTimeInput.value);
+                const localOffset = futureLocal.getTimezoneOffset();
+                const futureAdjusted = new Date(futureLocal.getTime() - (futureTzOffset + localOffset) * 60000);
+                document.getElementById('future-time-display').textContent = formatDate(futureAdjusted);
+            }
+        }
+
+        function calculateDecay() {
+            const isotope = document.getElementById('isotope').value;
+            const initialActivity = parseFloat(document.getElementById('initial-activity').value);
+            const initialTimeStr = document.getElementById('initial-time').value;
+            const futureTimeStr = document.getElementById('future-time').value;
+            const initialTzOffset = parseInt(document.getElementById('initial-timezone').value);
+            const futureTzOffset = parseInt(document.getElementById('future-timezone').value);
+
+            if (!initialTimeStr || !futureTimeStr || isNaN(initialActivity)) {
+                document.getElementById('future-activity').textContent = '--';
+                document.getElementById('time-difference').textContent = '--';
+                return;
+            }
+
+            const initialLocal = new Date(initialTimeStr);
+            const futureLocal = new Date(futureTimeStr);
+
+            const localOffset = initialLocal.getTimezoneOffset();
+            const initialTime = new Date(initialLocal.getTime() - (initialTzOffset + localOffset) * 60000);
+            const futureTime = new Date(futureLocal.getTime() - (futureTzOffset + localOffset) * 60000);
+
+            const timeDiff = (futureTime - initialTime) / (1000 * 60 * 60);
+
+            const halfLife = halfLives[isotope];
+            const decayConstant = Math.log(2) / halfLife;
+            const futureActivity = initialActivity * Math.exp(-decayConstant * timeDiff);
+
+            document.getElementById('future-activity').textContent = 
+                futureActivity.toFixed(3);
+            document.getElementById('time-difference').textContent = 
+                formatTimeDifference(timeDiff);
+
+            updateTimeDisplays();
+        }
+
+        document.getElementById('isotope').addEventListener('change', calculateDecay);
+        document.getElementById('initial-activity').addEventListener('input', calculateDecay);
+        document.getElementById('initial-time').addEventListener('change', calculateDecay);
+        document.getElementById('future-time').addEventListener('change', calculateDecay);
+        document.getElementById('initial-timezone').addEventListener('change', calculateDecay);
+        document.getElementById('future-timezone').addEventListener('change', calculateDecay);
+
+        calculateDecay();
+    </script>
+</body>
+</html>
